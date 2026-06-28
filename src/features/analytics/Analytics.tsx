@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { BarChart2, Clock, Target, TrendingUp } from 'lucide-react';
 import { useApp } from '@/store/AppProvider';
 import { formatDuration } from '@/lib/format';
-import { getPeriodFocusMinutes, getCompletionRate, getDeepWorkScore, getHeatmapData } from '@/lib/analytics';
+import { getPeriodFocusMinutes, getCompletionRate, getDeepWorkScore, getHeatmapData, getInterruptionReasonStats } from '@/lib/analytics';
 import { Card } from '@/components/ui/GlassPanel';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +35,8 @@ export const Analytics: React.FC = () => {
   const completionRate = getCompletionRate(state.tasks);
   const deepWorkScore = getDeepWorkScore(state.sessions, state.settings.dailyFocusGoalMinutes);
   const heatmap = getHeatmapData(state.sessions);
+  const reasonStats = getInterruptionReasonStats(state.interruptions).slice(0, 5);
+  const interruptionsBySession = new Map(state.interruptions.map(interruption => [interruption.sessionId, interruption.reason]));
   const recentSessions = [...state.sessions].filter(s => s.endedAt).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()).slice(0, 10);
 
   const stats = [
@@ -74,13 +76,29 @@ export const Analytics: React.FC = () => {
         ))}
       </div>
 
-      <Card className="p-5 mb-8">
-        <div className="flex items-center gap-2 mb-4">
-          <BarChart2 className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">Focus Heatmap</h3>
-        </div>
-        <Heatmap data={heatmap} />
-      </Card>
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart2 className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-medium">Focus Heatmap</h3>
+          </div>
+          <Heatmap data={heatmap} />
+        </Card>
+
+        <Card className="p-5">
+          <h3 className="text-sm font-medium mb-4">Interruption Reasons</h3>
+          <div className="space-y-3">
+            {reasonStats.length > 0 ? reasonStats.map(item => (
+              <div key={item.reason} className="flex items-center justify-between gap-4">
+                <span className="text-sm truncate">{item.reason}</span>
+                <span className="text-xs text-muted-foreground shrink-0">{item.count}</span>
+              </div>
+            )) : (
+              <p className="text-sm text-muted-foreground">No interruptions logged yet.</p>
+            )}
+          </div>
+        </Card>
+      </div>
 
       <Card className="p-5">
         <h3 className="text-sm font-medium mb-4">Session History</h3>
@@ -90,6 +108,9 @@ export const Analytics: React.FC = () => {
               <div>
                 <p className="text-sm">{s.targetTitle}</p>
                 <p className="text-xs text-muted-foreground">{new Date(s.startedAt).toLocaleDateString()}</p>
+                {s.interrupted && interruptionsBySession.get(s.id) && (
+                  <p className="text-xs text-muted-foreground mt-0.5">Reason: {interruptionsBySession.get(s.id)}</p>
+                )}
               </div>
               <div className="text-right">
                 <span className="text-sm font-medium">{s.durationMinutes}m</span>

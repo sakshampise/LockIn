@@ -1,4 +1,4 @@
-import type { FocusSession } from '@/types';
+import type { FocusSession, Interruption } from '@/types';
 import { isSameDay, isToday } from '@/lib/format';
 
 export function getTodayFocusMinutes(sessions: FocusSession[]): number {
@@ -71,4 +71,14 @@ export function getPeriodFocusMinutes(sessions: FocusSession[], days: number): n
   return sessions
     .filter(s => s.completed && new Date(s.startedAt).getTime() >= cutoff)
     .reduce((sum, s) => sum + s.durationMinutes, 0);
+}
+export function getInterruptionReasonStats(interruptions: Interruption[]): { reason: string; count: number }[] {
+  const counts = new Map<string, number>();
+  interruptions.forEach(interruption => {
+    const reason = interruption.reason.trim() || 'Unspecified';
+    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  });
+  return [...counts.entries()]
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
 }

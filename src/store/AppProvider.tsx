@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { AppState, FocusPreset, Page, Priority, Recurrence, Task, UserSettings, ViewId } from '@/types';
+
+type FocusSessionConfig = Pick<FocusPreset, 'id' | 'focusDurationMinutes' | 'breakCount' | 'breakDurationMinutes' | 'longBreakDurationMinutes' | 'sessionsBeforeLongBreak'>;
 import { useAuth } from '@/services/auth/AuthProvider';
 import * as pageService from '@/services/data/pageService';
 import * as taskService from '@/services/data/taskService';
@@ -47,7 +49,7 @@ interface AppContextValue {
   updateFocusPreset: (preset: FocusPreset) => Promise<void>;
   deleteFocusPreset: (presetId: string) => Promise<void>;
   selectFocusPreset: (presetId: string | null) => void;
-  startFocus: (targetId: string, targetType: 'page' | 'task', targetTitle: string, presetId?: string | null) => Promise<void>;
+  startFocus: (targetId: string, targetType: 'page' | 'task', targetTitle: string, presetId?: string | null, config?: FocusSessionConfig) => Promise<void>;
   endFocus: (completed: boolean, interrupted: boolean, reason?: string) => Promise<void>;
   updateSettings: (settings: Partial<UserSettings>) => Promise<void>;
 }

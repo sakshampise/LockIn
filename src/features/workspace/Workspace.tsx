@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { ChevronRight, Plus, FileText, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useApp } from '@/store/AppProvider';
@@ -14,6 +14,8 @@ const SLASH_COMMANDS = [
   { cmd: 'quote', label: 'Quote', prefix: '> ' },
   { cmd: 'code', label: 'Code Block', prefix: '```\n' },
 ];
+
+const AUTOSAVE_DELAY_MS = 700;
 
 function PageTreeItem({ page, pages, depth, activeId, onSelect }: {
   page: Page; pages: Page[]; depth: number; activeId: string | null;
@@ -46,14 +48,73 @@ function PageTreeItem({ page, pages, depth, activeId, onSelect }: {
 export const Workspace: React.FC = () => {
   const { state, setActivePage, updatePage, addPage, deletePage, startFocus } = useApp();
   const page = state.pages.find(p => p.id === state.activePageId);
+  const rootPages = useMemo(() => state.pages.filter(p => !p.parentId), [state.pages]);
+  const [titleDraft, setTitleDraft] = useState(page?.title ?? '');
+  const [contentDraft, setContentDraft] = useState(page?.content ?? '');
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashFilter, setSlashFilter] = useState('');
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPageRef = useRef<Page | null>(null);
+  const updatePageRef = useRef(updatePage);
+
+  useEffect(() => {
+    updatePageRef.current = updatePage;
+  }, [updatePage]);
+
+  useEffect(() => {
+    setTitleDraft(page?.title ?? '');
+    setContentDraft(page?.content ?? '');
+    setSlashOpen(false);
+    setSlashFilter('');
+  }, [page?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (pendingPageRef.current) void updatePageRef.current(pendingPageRef.current);
+    };
+  }, []);
+
+  const scheduleSave = useCallback((nextPage: Page) => {
+    pendingPageRef.current = nextPage;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const pending = pendingPageRef.current;
+      pendingPageRef.current = null;
+      saveTimerRef.current = null;
+      if (pending) void updatePageRef.current(pending);
+    }, AUTOSAVE_DELAY_MS);
+  }, []);
+
+  const updateDraftPage = useCallback((changes: Partial<Pick<Page, 'title' | 'content'>>) => {
+    if (!page) return;
+    const nextPage = {
+      ...page,
+      title: changes.title ?? titleDraft,
+      content: changes.content ?? contentDraft,
+      updatedAt: new Date().toISOString(),
+    };
+    scheduleSave(nextPage);
+  }, [contentDraft, page, scheduleSave, titleDraft]);
+
+  const handleTitleChange = useCallback((title: string) => {
+    setTitleDraft(title);
+    updateDraftPage({ title });
+  }, [updateDraftPage]);
 
   const handleContentChange = useCallback((content: string) => {
-    if (!page) return;
-    updatePage({ ...page, content, updatedAt: new Date().toISOString() });
-  }, [page, updatePage]);
+    setContentDraft(content);
+    updateDraftPage({ content });
+  }, [updateDraftPage]);
+
+  const flushPendingSave = useCallback(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+    const pending = pendingPageRef.current;
+    pendingPageRef.current = null;
+    if (pending) void updatePageRef.current(pending);
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const val = e.currentTarget.value;
@@ -81,19 +142,22 @@ export const Workspace: React.FC = () => {
     }
   };
 
-  const filtered = SLASH_COMMANDS.filter(c => c.cmd.includes(slashFilter) || c.label.toLowerCase().includes(slashFilter.toLowerCase()));
+  const filtered = useMemo(
+    () => SLASH_COMMANDS.filter(c => c.cmd.includes(slashFilter) || c.label.toLowerCase().includes(slashFilter.toLowerCase())),
+    [slashFilter],
+  );
 
   return (
     <div className="flex h-full">
       <div className="w-56 border-r border-border p-3 shrink-0 overflow-y-auto">
         <div className="flex items-center justify-between mb-3 px-1">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pages</span>
-          <button onClick={() => addPage('Untitled')} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
+          <button onClick={() => void addPage('Untitled')} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
-        {state.pages.filter(p => !p.parentId).map(p => (
-          <PageTreeItem key={p.id} page={p} pages={state.pages} depth={0} activeId={state.activePageId} onSelect={setActivePage} />
+        {rootPages.map(p => (
+          <PageTreeItem key={p.id} page={p} pages={state.pages} depth={0} activeId={state.activePageId} onSelect={id => { flushPendingSave(); setActivePage(id); }} />
         ))}
       </div>
 
@@ -102,19 +166,20 @@ export const Workspace: React.FC = () => {
           <motion.div key={page.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-3xl mx-auto px-8 py-10">
             <div className="flex items-start justify-between mb-6">
               <input
-                value={page.title}
-                onChange={e => updatePage({ ...page, title: e.target.value, updatedAt: new Date().toISOString() })}
+                value={titleDraft}
+                onChange={e => handleTitleChange(e.target.value)}
+                onBlur={flushPendingSave}
                 className="text-3xl font-bold tracking-tight bg-transparent outline-none w-full"
                 placeholder="Untitled"
               />
               <div className="flex gap-2 shrink-0 ml-4">
                 <button
-                  onClick={() => startFocus(page.id, 'page', page.title)}
+                  onClick={() => { flushPendingSave(); void startFocus(page.id, 'page', titleDraft || page.title); }}
                   className="px-3 py-1.5 rounded-lg bg-accent text-xs font-medium hover:bg-accent/80 transition-colors"
                 >
                   Focus
                 </button>
-                <button onClick={() => deletePage(page.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400">
+                <button onClick={() => void deletePage(page.id)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -122,8 +187,9 @@ export const Workspace: React.FC = () => {
             <div className="relative">
               <textarea
                 ref={textareaRef}
-                value={page.content}
+                value={contentDraft}
                 onChange={e => handleContentChange(e.target.value)}
+                onBlur={flushPendingSave}
                 onKeyDown={handleKeyDown}
                 className="w-full min-h-[60vh] bg-transparent resize-none outline-none text-[15px] leading-relaxed font-mono text-foreground/90 placeholder:text-muted-foreground/50"
                 placeholder="Start writing… Type / for commands"
@@ -135,7 +201,7 @@ export const Workspace: React.FC = () => {
                     <button
                       key={c.cmd}
                       onClick={() => {
-                        const val = page.content;
+                        const val = contentDraft;
                         const pos = textareaRef.current?.selectionStart ?? val.length;
                         const lineStart = val.lastIndexOf('\n', pos - 1) + 1;
                         handleContentChange(val.slice(0, lineStart) + c.prefix + val.slice(pos));
@@ -155,7 +221,7 @@ export const Workspace: React.FC = () => {
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <FileText className="w-12 h-12 mb-4 opacity-30" />
             <p className="text-sm">Select or create a page</p>
-            <button onClick={() => addPage('Untitled')} className="mt-4 px-4 py-2 rounded-lg bg-accent text-sm font-medium hover:bg-accent/80">
+            <button onClick={() => void addPage('Untitled')} className="mt-4 px-4 py-2 rounded-lg bg-accent text-sm font-medium hover:bg-accent/80">
               New Page
             </button>
           </div>
