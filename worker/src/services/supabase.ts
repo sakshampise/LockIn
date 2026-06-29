@@ -5,7 +5,7 @@ import * as path from 'path';
 // Load from root .env if it exists
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
