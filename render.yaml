@@ -1,0 +1,74 @@
+services:
+  - type: cron
+    name: lockin-daily-ai-productivity-summary
+    runtime: node
+    plan: starter
+    schedule: "0 2 * * *"
+    buildCommand: npm ci
+    startCommand: npm run workflow:ai
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: LOCKIN_WORKFLOW_SECRET
+        sync: false
+      - key: RENDER_WORKFLOW_SECRET
+        sync: false
+      - key: LOCKIN_WORKFLOW_USER_ID
+        sync: false
+      - key: LOCKIN_WORKFLOW_USER_JWT
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: SARVAM_MODEL
+        value: sarvam-30b
+      - key: LOCKIN_WORKFLOW_MODE
+        value: daily
+      - key: LOCKIN_AI_WORKFLOW_KINDS
+        value: dashboard,distraction_patterns,productive_hours
+      - key: LOCKIN_MAX_ATTEMPTS
+        value: "3"
+      - key: LOCKIN_RETRY_DELAY_MS
+        value: "2000"
+
+  - type: cron
+    name: lockin-weekly-ai-productivity-report
+    runtime: node
+    plan: starter
+    schedule: "0 3 * * 0"
+    buildCommand: npm ci
+    startCommand: npm run workflow:weekly
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: LOCKIN_WORKFLOW_SECRET
+        sync: false
+      - key: RENDER_WORKFLOW_SECRET
+        sync: false
+      - key: LOCKIN_WORKFLOW_USER_ID
+        sync: false
+      - key: LOCKIN_WORKFLOW_USER_JWT
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: SARVAM_MODEL
+        value: sarvam-30b
+      - key: LOCKIN_WORKFLOW_MODE
+        value: weekly
+      - key: LOCKIN_AI_WORKFLOW_KINDS
+        value: dashboard,weekly_report,distraction_patterns,productive_hours
+      - key: LOCKIN_MAX_ATTEMPTS
+        value: "3"
+      - key: LOCKIN_RETRY_DELAY_MS
+        value: "2000"
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USERNAME
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: LOCKIN_GRAPH_USER_ID
+        sync: false

@@ -1,7 +1,21 @@
-export type ViewId = 'dashboard' | 'workspace' | 'tasks' | 'focus' | 'analytics' | 'settings' | 'notion-import';
+export type ViewId = 'dashboard' | 'workspace' | 'tasks' | 'focus' | 'analytics' | 'settings' | 'notion-import' | 'monitor';
 
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type Recurrence = 'none' | 'daily' | 'weekly' | 'monthly';
+export type AIInsightKind =
+  | 'dashboard'
+  | 'session_plan'
+  | 'session_reflection'
+  | 'weekly_report'
+  | 'distraction_patterns'
+  | 'productive_hours'
+  | 'task_summary'
+  | 'recommendation'
+  | 'smart_planner'
+  | 'daily_review'
+  | 'task_breakdown'
+  | 'burnout_detection'
+  | 'prioritization';
 
 export interface Page {
   id: string;
@@ -66,11 +80,53 @@ export interface Interruption {
   timestamp: string;
 }
 
+export interface AIInsight {
+  id: string;
+  kind: AIInsightKind;
+  title: string;
+  summary: string;
+  recommendations: string[];
+  evidence: Record<string, unknown>;
+  relatedSessionId: string | null;
+  relatedTaskId: string | null;
+  sourceStart: string | null;
+  sourceEnd: string | null;
+  provider: string;
+  model: string;
+  confidence: number | null;
+  generatedAt: string;
+  createdAt: string;
+}
+
 export interface UserSettings {
   name: string;
   dailyFocusGoalMinutes: number;
-  defaultSessionMinutes: number;
   theme: 'dark' | 'light';
+  cloudAiEnabled: boolean;
+}
+
+export type WorkflowRunStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'retrying' | 'scheduled' | 'cancelled' | 'dead_letter';
+
+export interface WorkflowRun {
+  id: string;
+  workflowName: string;
+  status: WorkflowRunStatus;
+  metadata: Record<string, any>;
+  attemptCount: number;
+  workerId: string | null;
+  lastError: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  idempotencyKey: string;
+  logs: any[];
+}
+
+/** Serializable break/focus block used to reconstruct a session plan after page refresh. */
+export interface StoredSessionPlan {
+  focusDurationMinutes: number;
+  breakMode: 'auto' | 'off';
 }
 
 export interface AppState {
@@ -79,11 +135,15 @@ export interface AppState {
   focusPresets: FocusPreset[];
   sessions: FocusSession[];
   interruptions: Interruption[];
+  aiInsights: AIInsight[];
+  workflowRuns: WorkflowRun[];
   settings: UserSettings;
   activeView: ViewId;
   activePageId: string | null;
   activeFocusSessionId: string | null;
   activeFocusPresetId: string | null;
+  /** The session plan used to start the active focus session. Null when no session is running. */
+  activeFocusSessionPlan: StoredSessionPlan | null;
   loading: boolean;
   error: string | null;
 }

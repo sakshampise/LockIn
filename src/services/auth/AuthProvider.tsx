@@ -44,8 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
-      if (error) console.error('Failed to read auth session:', error);
-      setSession(data.session);
+      setSession(error ? null : data.session);
       setLoading(false);
     });
 

@@ -46,7 +46,7 @@ function PageTreeItem({ page, pages, depth, activeId, onSelect }: {
 }
 
 export const Workspace: React.FC = () => {
-  const { state, setActivePage, updatePage, addPage, deletePage, startFocus } = useApp();
+  const { state, setActivePage, updatePage, addPage, deletePage, startFocus, setView } = useApp();
   const page = state.pages.find(p => p.id === state.activePageId);
   const rootPages = useMemo(() => state.pages.filter(p => !p.parentId), [state.pages]);
   const [titleDraft, setTitleDraft] = useState(page?.title ?? '');
@@ -174,7 +174,7 @@ export const Workspace: React.FC = () => {
               />
               <div className="flex gap-2 shrink-0 ml-4">
                 <button
-                  onClick={() => { flushPendingSave(); void startFocus(page.id, 'page', titleDraft || page.title); }}
+                  onClick={() => { flushPendingSave(); void startFocus(page.id, 'page', titleDraft || page.title, 25, 'auto'); setView('focus'); }}
                   className="px-3 py-1.5 rounded-lg bg-accent text-xs font-medium hover:bg-accent/80 transition-colors"
                 >
                   Focus

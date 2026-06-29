@@ -33,6 +33,16 @@ export const RecentNotes: React.FC = () => {
             </div>
           </div>
         ))}
+        {notes.length === 0 && (
+          <button
+            onClick={() => setView('workspace')}
+            className="md:col-span-3 p-8 rounded-2xl border border-border bg-card/50 hover:bg-card transition-colors text-center text-muted-foreground"
+          >
+            <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">No notes yet</p>
+            <p className="text-xs mt-1">Create a page to start building your workspace.</p>
+          </button>
+        )}
       </div>
     </motion.div>
   );

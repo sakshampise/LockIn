@@ -1,15 +1,11 @@
 import React, { useState } from 'react';
-import { Download, User, Clock, Palette, LogOut } from 'lucide-react';
+import { Download, User, Palette, LogOut, Clock } from 'lucide-react';
 import { useApp } from '@/store/AppProvider';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/GlassPanel';
 import { useAuth } from '@/services/auth/AuthProvider';
 
-function numberValue(value: string, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 export const Settings: React.FC = () => {
   const { state, updateSettings, setView } = useApp();
@@ -17,13 +13,11 @@ export const Settings: React.FC = () => {
   const { settings } = state;
   const [nameDraft, setNameDraft] = useState(settings.name);
   const [dailyGoalDraft, setDailyGoalDraft] = useState(String(settings.dailyFocusGoalMinutes));
-  const [defaultSessionDraft, setDefaultSessionDraft] = useState(String(settings.defaultSessionMinutes));
 
   React.useEffect(() => {
     setNameDraft(settings.name);
     setDailyGoalDraft(String(settings.dailyFocusGoalMinutes));
-    setDefaultSessionDraft(String(settings.defaultSessionMinutes));
-  }, [settings.dailyFocusGoalMinutes, settings.defaultSessionMinutes, settings.name]);
+  }, [settings.name, settings.dailyFocusGoalMinutes]);
 
   const commitName = () => {
     const name = nameDraft.trim();
@@ -32,16 +26,12 @@ export const Settings: React.FC = () => {
   };
 
   const commitDailyGoal = () => {
-    const value = Math.min(1440, Math.max(1, numberValue(dailyGoalDraft, settings.dailyFocusGoalMinutes)));
+    const parsed = Number(dailyGoalDraft);
+    const value = Math.min(1440, Math.max(1, Number.isFinite(parsed) ? parsed : settings.dailyFocusGoalMinutes));
     setDailyGoalDraft(String(value));
     if (value !== settings.dailyFocusGoalMinutes) void updateSettings({ dailyFocusGoalMinutes: value });
   };
 
-  const commitDefaultSession = () => {
-    const value = Math.min(240, Math.max(1, numberValue(defaultSessionDraft, settings.defaultSessionMinutes)));
-    setDefaultSessionDraft(String(value));
-    if (value !== settings.defaultSessionMinutes) void updateSettings({ defaultSessionMinutes: value });
-  };
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
@@ -82,36 +72,23 @@ export const Settings: React.FC = () => {
             />
           </Card>
 
+
           <Card className="p-5">
             <div className="flex items-center gap-2 mb-4">
               <Clock className="w-4 h-4 text-muted-foreground" />
-              <h3 className="text-sm font-medium">Focus Defaults</h3>
+              <h3 className="text-sm font-medium">Daily Goal</h3>
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Daily Goal (minutes)</label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={1440}
-                  value={dailyGoalDraft}
-                  onChange={e => setDailyGoalDraft(e.target.value)}
-                  onBlur={commitDailyGoal}
-                  onKeyDown={e => e.key === 'Enter' && commitDailyGoal()}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Default Session (minutes)</label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={240}
-                  value={defaultSessionDraft}
-                  onChange={e => setDefaultSessionDraft(e.target.value)}
-                  onBlur={commitDefaultSession}
-                  onKeyDown={e => e.key === 'Enter' && commitDefaultSession()}
-                />
-              </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Daily Focus Goal (minutes)</label>
+              <Input
+                type="number"
+                min={1}
+                max={1440}
+                value={dailyGoalDraft}
+                onChange={e => setDailyGoalDraft(e.target.value)}
+                onBlur={commitDailyGoal}
+                onKeyDown={e => e.key === 'Enter' && commitDailyGoal()}
+              />
             </div>
           </Card>
 
@@ -121,6 +98,49 @@ export const Settings: React.FC = () => {
               <h3 className="text-sm font-medium">Appearance</h3>
             </div>
             <p className="text-xs text-muted-foreground">Dark mode is enabled by default for deep work.</p>
+          </Card>
+
+          <Card className="p-5 border-emerald-500/20">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <div className={`w-2 h-2 rounded-full ${settings.cloudAiEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                </div>
+                <h3 className="text-sm font-medium">AI Provider</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{settings.cloudAiEnabled ? 'Cloud Enabled' : 'Offline Mode'}</span>
+                <button
+                  type="button"
+                  onClick={() => updateSettings({ cloudAiEnabled: !settings.cloudAiEnabled })}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-background ${settings.cloudAiEnabled ? 'bg-emerald-500' : 'bg-muted'}`}
+                >
+                  <span aria-hidden="true" className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.cloudAiEnabled ? 'translate-x-2' : '-translate-x-2'}`} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="rounded-lg border border-border bg-background/50 p-4 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Active Provider</span>
+                <span className="font-medium text-foreground">{settings.cloudAiEnabled ? 'Sarvam AI (Cloud proxy)' : 'Local Intelligence (Offline)'}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Connection Status</span>
+                {settings.cloudAiEnabled ? (
+                  <span className="text-emerald-500 font-medium flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Edge Function Ready
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground font-medium flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" /> Disconnected
+                  </span>
+                )}
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-3">
+              Cloud AI uses the Sarvam AI model powered by Supabase Edge Functions. If disabled or unreachable, the system automatically falls back to the deterministic local intelligence engine.
+            </p>
           </Card>
 
           <Card className="p-5">

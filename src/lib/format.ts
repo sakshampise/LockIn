@@ -22,6 +22,18 @@ export function isToday(dateStr: string): boolean {
   return d.toDateString() === today.toDateString();
 }
 
+/**
+ * Returns a 'YYYY-MM-DD' string representing the date in local time.
+ * This avoids the timezone shift issues of Date.prototype.toISOString().
+ */
+export function toLocalDateString(date: Date | string | number): string {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function isSameDay(a: string, b: Date): boolean {
   return new Date(a).toDateString() === b.toDateString();
 }

@@ -133,7 +133,7 @@ begin
   )
   values (
     new.id,
-    'Deep Work',
+    'Focus Configuration',
     25,
     3,
     5,

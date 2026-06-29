@@ -1,14 +1,14 @@
 import React from 'react';
-import { PenLine, PlayCircle, ListTodo, BarChart2 } from 'lucide-react';
+import { PlayCircle, ListTodo, BarChart2, BrainCircuit } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useApp } from '@/store/AppProvider';
 
 export const QuickActions: React.FC = () => {
-  const { addPage, addTask, setView } = useApp();
+  const { addTask, setView } = useApp();
   const actions = [
-    { icon: PenLine, label: 'New Note', fn: () => { addPage('Untitled'); setView('workspace'); } },
-    { icon: PlayCircle, label: 'Start Focus', fn: () => setView('focus') },
-    { icon: ListTodo, label: 'Add Task', fn: () => { addTask('New task'); setView('tasks'); } },
+    { icon: BrainCircuit, label: 'Smart Plan', fn: () => setView('focus') },
+    { icon: PlayCircle, label: 'Focus Mode', fn: () => setView('focus') },
+    { icon: ListTodo, label: 'Add Task', fn: () => { void addTask('New task'); setView('tasks'); } },
     { icon: BarChart2, label: 'Analytics', fn: () => setView('analytics') },
   ];
 

@@ -27,6 +27,13 @@ export const TasksWidget: React.FC = () => {
             <span className={cn('text-sm', task.done ? 'text-muted-foreground line-through' : 'text-foreground')}>{task.title}</span>
           </div>
         ))}
+        {tasks.length === 0 && (
+          <div className="h-full min-h-24 flex flex-col items-center justify-center text-center text-muted-foreground">
+            <CheckSquare className="w-8 h-8 mb-2 opacity-30" />
+            <p className="text-sm">No active tasks</p>
+            <button onClick={() => setView('tasks')} className="text-xs mt-1 hover:text-foreground transition-colors">Add one</button>
+          </div>
+        )}
       </div>
     </motion.div>
   );

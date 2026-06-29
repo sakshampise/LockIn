@@ -8,10 +8,12 @@ import { FocusMode } from './features/focus/FocusMode';
 import { Analytics } from './features/analytics/Analytics';
 import { Settings } from './features/settings/Settings';
 import { NotionImport } from './features/notion-import/NotionImport';
+import { WorkflowMonitor } from './features/monitor/WorkflowMonitor';
 import { AppProvider, useApp } from './store/AppProvider';
 import { AuthGate } from './services/auth/AuthGate';
 import { AuthProvider } from './services/auth/AuthProvider';
 import { Button } from './components/ui/Button';
+import { SessionReflectionModal } from './features/focus/components/SessionReflectionModal';
 import type { ViewId } from './types';
 
 const VIEWS: Record<ViewId, React.FC> = {
@@ -22,6 +24,7 @@ const VIEWS: Record<ViewId, React.FC> = {
   analytics: Analytics,
   settings: Settings,
   'notion-import': NotionImport,
+  monitor: WorkflowMonitor,
 };
 
 function AppContent() {
@@ -32,7 +35,10 @@ function AppContent() {
   if (state.loading) {
     return (
       <div className="h-screen w-full bg-background text-foreground flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading workspace</p>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border border-border border-t-foreground/70 animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading workspace</p>
+        </div>
       </div>
     );
   }
@@ -51,6 +57,14 @@ function AppContent() {
 
   return (
     <AppShell hidePanel={hidePanel}>
+      {state.error && (
+        <div className="px-5 pt-4">
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex items-center justify-between gap-3">
+            <span>{state.error}</span>
+            <button onClick={() => void refreshData()} className="text-xs font-medium text-red-200 hover:text-white transition-colors">Retry</button>
+          </div>
+        </div>
+      )}
       <AnimatePresence mode="wait">
         <motion.div
           key={state.activeView}
@@ -63,6 +77,7 @@ function AppContent() {
           <View />
         </motion.div>
       </AnimatePresence>
+      <SessionReflectionModal />
     </AppShell>
   );
 }

@@ -3,6 +3,81 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      ai_insights: {
+        Row: {
+          confidence: number | null;
+          created_at: string;
+          evidence: Json;
+          generated_at: string;
+          id: string;
+          kind: Database['public']['Enums']['lockin_ai_insight_kind'];
+          model: string;
+          provider: string;
+          recommendations: Json;
+          related_session_id: string | null;
+          related_task_id: string | null;
+          source_end: string | null;
+          source_start: string | null;
+          summary: string;
+          title: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          confidence?: number | null;
+          created_at?: string;
+          evidence?: Json;
+          generated_at?: string;
+          id?: string;
+          kind: Database['public']['Enums']['lockin_ai_insight_kind'];
+          model?: string;
+          provider?: string;
+          recommendations?: Json;
+          related_session_id?: string | null;
+          related_task_id?: string | null;
+          source_end?: string | null;
+          source_start?: string | null;
+          summary: string;
+          title: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          confidence?: number | null;
+          created_at?: string;
+          evidence?: Json;
+          generated_at?: string;
+          id?: string;
+          kind?: Database['public']['Enums']['lockin_ai_insight_kind'];
+          model?: string;
+          provider?: string;
+          recommendations?: Json;
+          related_session_id?: string | null;
+          related_task_id?: string | null;
+          source_end?: string | null;
+          source_start?: string | null;
+          summary?: string;
+          title?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'ai_insights_session_owner_fk';
+            columns: ['user_id', 'related_session_id'];
+            isOneToOne: false;
+            referencedRelation: 'focus_sessions';
+            referencedColumns: ['user_id', 'id'];
+          },
+          {
+            foreignKeyName: 'ai_insights_task_owner_fk';
+            columns: ['user_id', 'related_task_id'];
+            isOneToOne: false;
+            referencedRelation: 'tasks';
+            referencedColumns: ['user_id', 'id'];
+          },
+        ];
+      };
       focus_presets: {
         Row: {
           break_count: number;
@@ -459,6 +534,57 @@ export type Database = {
           },
         ];
       };
+      workflow_runs: {
+        Row: {
+          attempt_count: number;
+          completed_at: string | null;
+          created_at: string;
+          id: string;
+          idempotency_key: string;
+          last_error: string | null;
+          logs: Json;
+          max_attempts: number;
+          metadata: Json;
+          started_at: string | null;
+          status: Database['public']['Enums']['lockin_workflow_run_status'];
+          updated_at: string;
+          user_id: string;
+          workflow_name: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          completed_at?: string | null;
+          created_at?: string;
+          id?: string;
+          idempotency_key: string;
+          last_error?: string | null;
+          logs?: Json;
+          max_attempts?: number;
+          metadata?: Json;
+          started_at?: string | null;
+          status?: Database['public']['Enums']['lockin_workflow_run_status'];
+          updated_at?: string;
+          user_id?: string;
+          workflow_name: string;
+        };
+        Update: {
+          attempt_count?: number;
+          completed_at?: string | null;
+          created_at?: string;
+          id?: string;
+          idempotency_key?: string;
+          last_error?: string | null;
+          logs?: Json;
+          max_attempts?: number;
+          metadata?: Json;
+          started_at?: string | null;
+          status?: Database['public']['Enums']['lockin_workflow_run_status'];
+          updated_at?: string;
+          user_id?: string;
+          workflow_name?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -472,6 +598,7 @@ export type Database = {
       };
     };
     Enums: {
+      lockin_ai_insight_kind: 'dashboard' | 'session_plan' | 'session_reflection' | 'weekly_report' | 'distraction_patterns' | 'productive_hours' | 'task_summary' | 'recommendation';
       lockin_focus_session_status: 'active' | 'completed' | 'interrupted' | 'cancelled';
       lockin_focus_target_type: 'page' | 'task';
       lockin_import_item_type: 'page' | 'task';
@@ -480,6 +607,7 @@ export type Database = {
       lockin_recurrence: 'none' | 'daily' | 'weekly' | 'monthly';
       lockin_task_priority: 'low' | 'medium' | 'high' | 'urgent';
       lockin_theme: 'dark' | 'light';
+      lockin_workflow_run_status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
     };
     CompositeTypes: Record<string, never>;
   };

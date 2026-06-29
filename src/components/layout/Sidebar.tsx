@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, CheckSquare, BrainCircuit, BarChart2, Settings, PenTool, Plus } from 'lucide-react';
+import { LayoutDashboard, CheckSquare, BrainCircuit, BarChart2, Settings, PenTool, Plus, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useApp } from '@/store/AppProvider';
@@ -11,6 +11,7 @@ const NAV_ITEMS: { icon: typeof LayoutDashboard; label: string; id: ViewId }[] =
   { icon: CheckSquare, label: 'Tasks', id: 'tasks' },
   { icon: BrainCircuit, label: 'Focus', id: 'focus' },
   { icon: BarChart2, label: 'Analytics', id: 'analytics' },
+  { icon: Activity, label: 'Automations', id: 'monitor' },
 ];
 
 export const Sidebar: React.FC = () => {

@@ -8,8 +8,8 @@ export function mapProfile(row: ProfileRow): UserSettings {
   return {
     name: row.display_name,
     dailyFocusGoalMinutes: row.daily_focus_goal_minutes,
-    defaultSessionMinutes: row.default_session_minutes,
     theme: row.theme,
+    cloudAiEnabled: true, // AppProvider handles localStorage override
   };
 }
 
@@ -29,7 +29,6 @@ export async function updateProfile(userId: string, settings: Partial<UserSettin
 
   if (settings.name !== undefined) payload.display_name = settings.name;
   if (settings.dailyFocusGoalMinutes !== undefined) payload.daily_focus_goal_minutes = settings.dailyFocusGoalMinutes;
-  if (settings.defaultSessionMinutes !== undefined) payload.default_session_minutes = settings.defaultSessionMinutes;
   if (settings.theme !== undefined) payload.theme = settings.theme;
 
   const { data, error } = await supabase

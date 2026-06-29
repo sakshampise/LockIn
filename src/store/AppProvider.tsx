@@ -1,20 +1,24 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { AppState, FocusPreset, Page, Priority, Recurrence, Task, UserSettings, ViewId } from '@/types';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type { AIInsightKind, AppState, FocusPreset, Page, Priority, Recurrence, Task, UserSettings, ViewId } from '@/types';
 
-type FocusSessionConfig = Pick<FocusPreset, 'id' | 'focusDurationMinutes' | 'breakCount' | 'breakDurationMinutes' | 'longBreakDurationMinutes' | 'sessionsBeforeLongBreak'>;
+
 import { useAuth } from '@/services/auth/AuthProvider';
 import * as pageService from '@/services/data/pageService';
 import * as taskService from '@/services/data/taskService';
 import * as profileService from '@/services/data/profileService';
 import * as focusPresetService from '@/services/data/focusPresetService';
 import * as focusSessionService from '@/services/data/focusSessionService';
+import * as aiInsightService from '@/services/data/aiInsightService';
+import * as enqueueService from '@/services/data/enqueueService';
+import * as workflowRunsService from '@/services/data/workflowRunsService';
 import { ensureUserProfile } from '@/services/auth/authService';
+import { supabase } from '@/lib/supabase/client';
 
 const defaultSettings: UserSettings = {
-  name: 'User',
-  dailyFocusGoalMinutes: 360,
-  defaultSessionMinutes: 25,
+  name: '',
+  dailyFocusGoalMinutes: 120,
   theme: 'dark',
+  cloudAiEnabled: true,
 };
 
 const initialState: AppState = {
@@ -23,11 +27,14 @@ const initialState: AppState = {
   focusPresets: [],
   sessions: [],
   interruptions: [],
+  aiInsights: [],
+  workflowRuns: [],
   settings: defaultSettings,
   activeView: 'dashboard',
   activePageId: null,
   activeFocusSessionId: null,
   activeFocusPresetId: null,
+  activeFocusSessionPlan: null,
   loading: true,
   error: null,
 };
@@ -38,9 +45,9 @@ interface AppContextValue {
   setActivePage: (pageId: string | null) => void;
   refreshData: () => Promise<void>;
   updatePage: (page: Page) => Promise<void>;
-  addPage: (title: string, parentId?: string | null) => Promise<void>;
+  addPage: (title: string, parentId?: string | null) => Promise<string>;
   deletePage: (pageId: string) => Promise<void>;
-  addTask: (title: string, opts?: Partial<Pick<Task, 'priority' | 'dueDate' | 'recurrence' | 'pageId' | 'description'>>) => Promise<void>;
+  addTask: (title: string, opts?: Partial<Pick<Task, 'priority' | 'dueDate' | 'recurrence' | 'pageId' | 'description' | 'done'>>) => Promise<void>;
   updateTask: (task: Task) => Promise<void>;
   toggleTask: (taskId: string) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -49,8 +56,9 @@ interface AppContextValue {
   updateFocusPreset: (preset: FocusPreset) => Promise<void>;
   deleteFocusPreset: (presetId: string) => Promise<void>;
   selectFocusPreset: (presetId: string | null) => void;
-  startFocus: (targetId: string, targetType: 'page' | 'task', targetTitle: string, presetId?: string | null, config?: FocusSessionConfig) => Promise<void>;
+  startFocus: (targetId: string, targetType: 'page' | 'task', targetTitle: string, durationMinutes: number, breakMode: 'auto' | 'off') => Promise<void>;
   endFocus: (completed: boolean, interrupted: boolean, reason?: string) => Promise<void>;
+  generateLocalInsights: (kind: AIInsightKind, options?: { sessionId?: string; taskId?: string }) => Promise<void>;
   updateSettings: (settings: Partial<UserSettings>) => Promise<void>;
 }
 
@@ -71,19 +79,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     try {
       await ensureUserProfile(user.id, user.email, user.user_metadata.display_name as string | undefined);
-      const [settings, pages, tasks, loadedPresets, sessions, interruptions] = await Promise.all([
+      const [settings, pages, tasks, loadedPresets, sessions, interruptions, loadedInsights] = await Promise.all([
         profileService.getProfile(user.id),
         pageService.listPages(),
         taskService.listTasks(),
         focusPresetService.listFocusPresets(),
         focusSessionService.listFocusSessions(),
         focusSessionService.listInterruptions(),
+        aiInsightService.listAIInsights().catch(() => []),
+        workflowRunsService.listWorkflowRuns().catch(() => [])
       ]);
       const focusPresets = loadedPresets.length > 0
         ? loadedPresets
         : [await focusPresetService.createFocusPreset({
-          name: 'Deep Work',
-          focusDurationMinutes: settings.defaultSessionMinutes,
+          name: 'Focus Configuration',
+          focusDurationMinutes: 25,
           breakCount: 3,
           breakDurationMinutes: 5,
           longBreakDurationMinutes: 15,
@@ -101,7 +111,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         focusPresets,
         sessions,
         interruptions,
-        settings,
+        aiInsights: loadedInsights,
+        workflowRuns: loadedInsights[3] as any || [],
+        settings: {
+          ...settings,
+          cloudAiEnabled: localStorage.getItem('lockin_cloud_ai_enabled') !== 'false'
+        },
         activePageId: pages.some(page => page.id === current.activePageId)
           ? current.activePageId
           : pages[0]?.id ?? null,
@@ -121,7 +136,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void refreshData();
-  }, [refreshData]);
+
+    if (!user) return;
+    
+    const insightsSub = supabase.channel('ai-insights-changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_insights', filter: `user_id=eq.${user.id}` }, (payload: any) => {
+        const newInsight = payload.new as any;
+        setState(current => ({
+          ...current,
+          aiInsights: [newInsight, ...current.aiInsights.filter(i => !(i.kind === newInsight.kind && i.kind !== 'session_reflection'))]
+        }));
+      })
+      .subscribe();
+      
+    const workflowsSub = supabase.channel('workflow-runs-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'workflow_runs', filter: `user_id=eq.${user.id}` }, (payload: any) => {
+        setState(current => {
+          if (payload.eventType === 'INSERT') {
+            return { ...current, workflowRuns: [payload.new as any, ...current.workflowRuns] };
+          }
+          if (payload.eventType === 'UPDATE') {
+            return { ...current, workflowRuns: current.workflowRuns.map(w => w.id === payload.new.id ? payload.new as any : w) };
+          }
+          if (payload.eventType === 'DELETE') {
+            return { ...current, workflowRuns: current.workflowRuns.filter(w => w.id !== payload.old.id) };
+          }
+          return current;
+        });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(insightsSub);
+      supabase.removeChannel(workflowsSub);
+    };
+  }, [refreshData, user]);
 
   const setView = useCallback((view: ViewId) => {
     setState(current => ({ ...current, activeView: view }));
@@ -142,12 +191,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.pages]);
 
-  const addPage = useCallback(async (title: string, parentId: string | null = null) => {
+  const addPage = useCallback(async (title: string, parentId: string | null = null): Promise<string> => {
     try {
       const page = await pageService.createPage(title, parentId);
       setState(current => ({ ...current, pages: [...current.pages, page], activePageId: page.id, error: null }));
+      return page.id;
     } catch (error) {
       setState(current => ({ ...current, error: error instanceof Error ? error.message : 'Could not create page.' }));
+      throw error;
     }
   }, []);
 
@@ -289,31 +340,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setState(current => ({ ...current, activeFocusPresetId: presetId }));
   }, []);
 
-  const startFocus = useCallback(async (targetId: string, targetType: 'page' | 'task', targetTitle: string, presetId?: string | null) => {
-    const selectedPresetId = presetId ?? state.activeFocusPresetId ?? getDefaultPresetId(state.focusPresets);
-    const preset = state.focusPresets.find(p => p.id === selectedPresetId);
-    const durationMinutes = preset?.focusDurationMinutes ?? state.settings.defaultSessionMinutes;
-
+  const startFocus = useCallback(async (targetId: string, targetType: 'page' | 'task', targetTitle: string, durationMinutes: number, breakMode: 'auto' | 'off') => {
+    const presetId = state.activeFocusPresetId ?? getDefaultPresetId(state.focusPresets);
+    const plan = { focusDurationMinutes: durationMinutes, breakMode };
     try {
       const session = await focusSessionService.startFocusSession({
         targetId,
         targetType,
         targetTitle,
-        presetId: selectedPresetId,
+        presetId,
         durationMinutes,
       });
       setState(current => ({
         ...current,
         sessions: [session, ...current.sessions],
         activeFocusSessionId: session.id,
-        activeFocusPresetId: selectedPresetId,
+        activeFocusPresetId: presetId,
+        activeFocusSessionPlan: plan,
         activeView: 'focus',
         error: null,
       }));
     } catch (error) {
       setState(current => ({ ...current, error: error instanceof Error ? error.message : 'Could not start focus session.' }));
     }
-  }, [state.activeFocusPresetId, state.focusPresets, state.settings.defaultSessionMinutes]);
+  }, [state.activeFocusPresetId, state.focusPresets]);
+
+  // Use a ref so endFocus always reads latest cloudAiEnabled without stale closure
+  const cloudAiEnabledRef = useRef(state.settings.cloudAiEnabled);
+  useEffect(() => { cloudAiEnabledRef.current = state.settings.cloudAiEnabled; }, [state.settings.cloudAiEnabled]);
 
   const endFocus = useCallback(async (completed: boolean, interrupted: boolean, reason?: string) => {
     const session = state.sessions.find(s => s.id === state.activeFocusSessionId);
@@ -326,23 +380,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         sessions: current.sessions.map(s => s.id === result.session.id ? result.session : s),
         interruptions: result.interruption ? [result.interruption, ...current.interruptions] : current.interruptions,
         activeFocusSessionId: null,
+        activeFocusSessionPlan: null,
         error: null,
       }));
+
+      // Enqueue session reflection asynchronously - backend handles Sarvam directly
+      if (cloudAiEnabledRef.current) {
+        void enqueueService.enqueueSessionReflection(result.session.id);
+      }
+
     } catch (error) {
       setState(current => ({ ...current, error: error instanceof Error ? error.message : 'Could not end focus session.' }));
     }
   }, [state.activeFocusSessionId, state.sessions]);
 
+  const generateLocalInsights = useCallback(async (kind: AIInsightKind, options?: { sessionId?: string; taskId?: string }) => {
+    try {
+      const insights = await aiInsightService.generateAIInsight({ kind, ...options });
+      if (insights.length > 0) {
+        setState(current => {
+          // Deduplicate: replace existing insights of same kind (except session_reflection which is per-session)
+          const isPerSession = kind === 'session_reflection' && options?.sessionId;
+          const filtered = isPerSession
+            ? current.aiInsights
+            : current.aiInsights.filter(existing => existing.kind !== kind);
+          return { ...current, aiInsights: [...insights, ...filtered], error: null };
+        });
+      }
+    } catch (error) {
+      setState(current => ({ ...current, error: error instanceof Error ? error.message : 'Could not generate AI insights.' }));
+    }
+  }, [state.settings.cloudAiEnabled]);
   const updateSettings = useCallback(async (settings: Partial<UserSettings>) => {
     if (!user) return;
-    const previous = state.settings;
-    const optimistic = { ...previous, ...settings };
-    setState(current => ({ ...current, settings: optimistic }));
     try {
-      const updated = await profileService.updateProfile(user.id, settings);
-      setState(current => ({ ...current, settings: updated, error: null }));
+      if (settings.cloudAiEnabled !== undefined) {
+        localStorage.setItem('lockin_cloud_ai_enabled', String(settings.cloudAiEnabled));
+      }
+      
+      const { cloudAiEnabled, ...dbSettings } = settings;
+      
+      let updatedSettings = state.settings;
+      if (Object.keys(dbSettings).length > 0) {
+        const dbResult = await profileService.updateProfile(user.id, dbSettings);
+        updatedSettings = { ...updatedSettings, ...dbResult };
+      }
+      
+      if (settings.cloudAiEnabled !== undefined) {
+        updatedSettings.cloudAiEnabled = settings.cloudAiEnabled;
+      }
+      
+      setState(current => ({ ...current, settings: updatedSettings, error: null }));
     } catch (error) {
-      setState(current => ({ ...current, settings: previous, error: error instanceof Error ? error.message : 'Could not update settings.' }));
+      setState(current => ({ ...current, error: error instanceof Error ? error.message : 'Could not update settings.' }));
     }
   }, [state.settings, user]);
 
@@ -365,6 +455,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     selectFocusPreset,
     startFocus,
     endFocus,
+    generateLocalInsights,
     updateSettings,
   }), [
     addPage,
@@ -385,6 +476,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     updateFocusPreset,
     updatePage,
     updateSettings,
+    generateLocalInsights,
     updateTask,
   ]);
 
